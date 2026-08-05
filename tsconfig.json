@@ -1,6 +1,12 @@
 {
   "compilerOptions": {
     "target": "ES2020",
+    // Note: this is CommonJS because webpack.config.ts itself is loaded directly
+    // by ts-node/webpack-cli (which relies on CommonJS globals like __dirname)
+    // and vitest.config.ts is loaded similarly. The *application* source under
+    // src/ is compiled separately by ts-loader inside webpack.config.ts, which
+    // overrides `module`/`moduleResolution` for that compilation - see the
+    // comment on the ts-loader rule for why.
     "module": "CommonJS",
     "jsx": "react-jsx",
     "strict": true,

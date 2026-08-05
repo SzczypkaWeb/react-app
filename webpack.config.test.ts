@@ -31,7 +31,9 @@ describe('webpack.config', () => {
   });
 
   it('resolves .tsx/.ts/.js and compiles them via ts-loader', () => {
-    expect(config.resolve?.extensions).toEqual(expect.arrayContaining(['.tsx', '.ts', '.js']));
+    expect(config.resolve?.extensions).toEqual(
+      expect.arrayContaining(['.tsx', '.ts', '.js']),
+    );
 
     const rules = config.module?.rules ?? [];
     const tsRule = rules.find(
@@ -42,7 +44,38 @@ describe('webpack.config', () => {
         (rule.test as RegExp)?.toString() === /\.tsx?$/.toString(),
     );
     expect(tsRule).toBeDefined();
-    expect((tsRule as { use: unknown }).use).toBe('ts-loader');
+
+    // `use` may be given either as the bare loader name or as an object with
+    // loader-specific `options`. Normalize both shapes to the loader name.
+    const use = (tsRule as { use: unknown }).use;
+    const loaderName =
+      typeof use === 'string' ? use : (use as { loader?: string })?.loader;
+    expect(loaderName).toBe('ts-loader');
+  });
+
+  it('overrides ts-loader to emit native ESM (not CommonJS) for app source, so dynamic import() survives for webpack code-splitting', () => {
+    // Regression guard for the eager-consumption bug: if ts-loader compiles
+    // src/index.tsx's `import('./bootstrap')` down to CommonJS, webpack can no
+    // longer split it into an async chunk, and react/react-dom end up bundled
+    // synchronously - see src/test/mfSharedEagerConsumption.test.ts for the
+    // full build-level regression test.
+    const rules = config.module?.rules ?? [];
+    const tsRule = rules.find(
+      (rule) =>
+        rule &&
+        typeof rule === 'object' &&
+        'test' in rule &&
+        (rule.test as RegExp)?.toString() === /\.tsx?$/.toString(),
+    );
+    const use = (tsRule as { use: unknown })?.use as {
+      loader?: string;
+      options?: {
+        compilerOptions?: { module?: string; moduleResolution?: string };
+      };
+    };
+
+    expect(use?.options?.compilerOptions?.module).not.toBe('CommonJS');
+    expect(use?.options?.compilerOptions?.module).toBeTruthy();
   });
 
   it('configures HtmlWebpackPlugin', () => {
@@ -69,7 +102,9 @@ describe('webpack.config', () => {
 
     expect(options.name).toBe('reactApp');
     expect(options.filename).toBe('remoteEntry.js');
-    expect(options.exposes).toMatchObject({ './Widget': expect.stringMatching(/Widget/) });
+    expect(options.exposes).toMatchObject({
+      './Widget': expect.stringMatching(/Widget/),
+    });
   });
 
   it('shares react and react-dom as singletons', () => {
