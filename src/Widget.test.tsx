@@ -29,8 +29,10 @@ describe('Widget', () => {
     const bodyDiv = screen.getByText('Hello from react-app remote').closest('div');
     // Text is in the card body; find the parent card element
     const card = bodyDiv?.parentElement?.closest('div');
-    // Card component from shared-ui applies the 'suib-card' class to the root
-    expect(card).toHaveClass('suib-card');
+    // shared-ui's Card no longer applies a semantic 'suib-card' class — as of
+    // its Tailwind v4 migration it applies Tailwind utility classes directly
+    // instead (see shared-ui's Card.tsx).
+    expect(card).toHaveClass('rounded-lg', 'border-border', 'bg-background');
   });
 
   it('renders a Button component below the Card', () => {
