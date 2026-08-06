@@ -1,0 +1,65 @@
+name: Azure Static Web Apps CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches: [main]
+
+jobs:
+  build_and_deploy_job:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    runs-on: ubuntu-latest
+    name: Build and Deploy Job
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable Corepack (pnpm)
+        run: corepack enable
+
+      # Build ręcznie (nie przez Oryx w akcji SWA), bo trzeba wstrzyknąć
+      # PACKAGES_READ_TOKEN jako GITHUB_TOKEN dla rejestru @szczypkaweb
+      # (npm.pkg.github.com) — patrz .npmrc w tym repo.
+      #
+      # `pnpm config set` (nie sam env var) jest tu konieczny: pnpm celowo
+      # ignoruje podstawianie ${GITHUB_TOKEN} w .npmrc zacommitowanym do repo
+      # (ten sam błąd, który mieliśmy przy `changeset publish` dla shared-ui).
+      - name: Configure registry auth
+        run: pnpm config set "//npm.pkg.github.com/:_authToken" "$GITHUB_TOKEN"
+        env:
+          GITHUB_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Deploy to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: "upload"
+          app_location: "dist"
+          api_location: ""
+          output_location: ""
+          skip_app_build: true
+
+  close_pull_request_job:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    name: Close Pull Request Job
+    steps:
+      - name: Close Pull Request
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: "close"
