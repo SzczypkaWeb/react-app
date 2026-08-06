@@ -16,7 +16,9 @@ const { ModuleFederationPlugin } = webpack.container;
 const PORT = 8081;
 
 const config: FullConfiguration = {
-  mode: 'development',
+  // Było zahardkodowane na 'development' — tak samo jak we frontend-shell,
+  // `pnpm build` nigdy nie produkował realnego builda produkcyjnego.
+  mode: process.env.NODE_ENV === 'production' ? 'production' : 'development',
   entry: path.resolve(__dirname, 'src/index.tsx'),
   output: {
     path: path.resolve(__dirname, 'dist'),
