@@ -69,6 +69,15 @@ const config: FullConfiguration = {
           },
         },
       },
+      {
+        test: /\.css$/i,
+        // Order matters - webpack applies loaders right-to-left, so a class
+        // like `flex` first goes through postcss-loader (Tailwind expands
+        // it to real declarations, autoprefixer adds vendor prefixes), then
+        // css-loader (resolves @import/url()), then style-loader (injects
+        // the resulting CSS into the page via a <style> tag).
+        use: ['style-loader', 'css-loader', 'postcss-loader'],
+      },
     ],
   },
   plugins: [

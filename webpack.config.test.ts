@@ -82,6 +82,23 @@ describe('webpack.config', () => {
     expect(() => findPlugin(HtmlWebpackPlugin)).not.toThrow();
   });
 
+  it('runs .css files through postcss-loader, css-loader, and style-loader (Tailwind v4)', () => {
+    const rules = config.module?.rules ?? [];
+    const cssRule = rules.find(
+      (rule) =>
+        rule &&
+        typeof rule === 'object' &&
+        'test' in rule &&
+        (rule.test as RegExp)?.toString() === /\.css$/i.toString(),
+    );
+    expect(cssRule).toBeDefined();
+    expect((cssRule as { use: unknown }).use).toEqual([
+      'style-loader',
+      'css-loader',
+      'postcss-loader',
+    ]);
+  });
+
   function getMfOptions() {
     const mfPlugin = findPlugin(webpack.container.ModuleFederationPlugin);
     // webpack stores the constructor options on `options` (some versions used

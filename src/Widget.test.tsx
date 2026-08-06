@@ -45,8 +45,14 @@ describe('Widget', () => {
     render(<Widget />);
 
     const button = screen.getByRole('button');
-    // Button component from shared-ui applies the 'suib-button' class
-    expect(button).toHaveClass('suib-button');
+    // shared-ui's Button no longer applies a semantic 'suib-button' class —
+    // as of its Tailwind v4 migration (feat/button-tailwind-conversion) it
+    // applies Tailwind utility classes directly instead, so the Button's
+    // dist CSS doesn't need its own stylesheet consumed by this app. Assert
+    // on the base classes present regardless of variant/size, rather than
+    // the full literal string (which also carries the default variant/size,
+    // making the assertion brittle to those defaults changing).
+    expect(button).toHaveClass('inline-flex', 'items-center', 'justify-center', 'rounded', 'cursor-pointer');
   });
 
   it('Button onClick handler logs to console when clicked', async () => {
