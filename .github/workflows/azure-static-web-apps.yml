@@ -20,6 +20,20 @@ jobs:
     # Settings -> Environments.
     environment:
       name: ${{ github.event_name == 'push' && 'production' || 'preview' }}
+    # Build ręcznie (nie przez Oryx w akcji SWA), bo trzeba wstrzyknąć
+    # PACKAGES_READ_TOKEN jako GITHUB_TOKEN dla rejestru @szczypkaweb
+    # (npm.pkg.github.com) — patrz .npmrc w tym repo, które czyta
+    # `${GITHUB_TOKEN}` wprost.
+    #
+    # Musi być na poziomie JOBA, nie pojedynczego stepa: .npmrc zacommitowany
+    # w repo ma najwyższy priorytet przy odczycie configu pnpm i nadpisuje z
+    # powrotem cokolwiek ustawi `pnpm config set` w osobnym stepie (dokładnie
+    # ten sam błąd, który mieliśmy przy `changeset publish` dla shared-ui) -
+    # jedyny sposób żeby `${GITHUB_TOKEN}` w .npmrc faktycznie się podstawił
+    # to mieć tę zmienną w env całego joba, żeby `pnpm install` widział ją
+    # bezpośrednio, bez pośredniczącego `pnpm config set`.
+    env:
+      GITHUB_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -31,18 +45,6 @@ jobs:
 
       - name: Enable Corepack (pnpm)
         run: corepack enable
-
-      # Build ręcznie (nie przez Oryx w akcji SWA), bo trzeba wstrzyknąć
-      # PACKAGES_READ_TOKEN jako GITHUB_TOKEN dla rejestru @szczypkaweb
-      # (npm.pkg.github.com) — patrz .npmrc w tym repo.
-      #
-      # `pnpm config set` (nie sam env var) jest tu konieczny: pnpm celowo
-      # ignoruje podstawianie ${GITHUB_TOKEN} w .npmrc zacommitowanym do repo
-      # (ten sam błąd, który mieliśmy przy `changeset publish` dla shared-ui).
-      - name: Configure registry auth
-        run: pnpm config set "//npm.pkg.github.com/:_authToken" "$GITHUB_TOKEN"
-        env:
-          GITHUB_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
