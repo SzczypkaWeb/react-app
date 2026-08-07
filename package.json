@@ -7,7 +7,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "dev": "webpack serve --config webpack.config.ts",
-    "build": "NODE_ENV=production webpack --config webpack.config.ts",
+    "build": "NODE_ENV=production webpack --config webpack.config.ts && cp staticwebapp.config.json dist/staticwebapp.config.json",
     "lint": "eslint src webpack.config.ts",
     "format": "prettier --write ."
   },
@@ -16,7 +16,7 @@
   "license": "ISC",
   "packageManager": "pnpm@10.34.4",
   "dependencies": {
-    "@szczypkaweb/shared-ui": "^0.2.0",
+    "@szczypkaweb/shared-ui": "^0.3.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

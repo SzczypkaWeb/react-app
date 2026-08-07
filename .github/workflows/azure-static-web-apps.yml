@@ -12,6 +12,14 @@ jobs:
     if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
     runs-on: ubuntu-latest
     name: Build and Deploy Job
+    # This job handles BOTH the real prod deploy (push to main) and Azure SWA's
+    # PR preview deploys - only the former should count as "production" for
+    # GitHub Environment protection rules (e.g. required reviewers), so the
+    # environment name is conditional. GitHub creates an Environment
+    # automatically on first reference if it doesn't already exist in
+    # Settings -> Environments.
+    environment:
+      name: ${{ github.event_name == 'push' && 'production' || 'preview' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -43,6 +51,7 @@ jobs:
         run: pnpm build
 
       - name: Deploy to Azure Static Web Apps
+        id: deploy
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
@@ -52,6 +61,25 @@ jobs:
           api_location: ""
           output_location: ""
           skip_app_build: true
+
+      # frontend-shell doesn't have its own Azure workflow yet (see task #8),
+      # so there's nowhere to auto-inject this as REACT_APP_REMOTE_URL. Until
+      # that exists, surface it here so whoever sets frontend-shell's build
+      # env (or that future workflow) knows the exact value to use - this app
+      # is a Module Federation remote (see webpack.config.ts), and
+      # frontend-shell needs this URL to find its remoteEntry.js at
+      # `${REACT_APP_REMOTE_URL}/remoteEntry.js` (defaults to
+      # http://localhost:8081 otherwise, which only works in local dev).
+      - name: Surface deployed URL for frontend-shell's REACT_APP_REMOTE_URL
+        if: github.event_name == 'push'
+        run: |
+          echo "### react-app deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Set frontend-shell's build-time \`REACT_APP_REMOTE_URL\` to:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ steps.deploy.outputs.static_web_app_url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'

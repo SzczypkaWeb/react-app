@@ -1,0 +1,17 @@
+{
+  "routes": [
+    {
+      "route": "/remoteEntry.js",
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-cache"
+      }
+    },
+    {
+      "route": "/*.js",
+      "headers": {
+        "Access-Control-Allow-Origin": "*"
+      }
+    }
+  ]
+}
