@@ -2,7 +2,7 @@ name: Azure Static Web Apps CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches: [main]
@@ -12,27 +12,27 @@ jobs:
     if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
     runs-on: ubuntu-latest
     name: Build and Deploy Job
-    # This job handles BOTH the real prod deploy (push to main) and Azure SWA's
-    # PR preview deploys - only the former should count as "production" for
-    # GitHub Environment protection rules (e.g. required reviewers), so the
-    # environment name is conditional. GitHub creates an Environment
-    # automatically on first reference if it doesn't already exist in
-    # Settings -> Environments.
+    # Three cases now, not two: prod (push main), staging (push staging),
+    # PR preview (Azure's own ephemeral-per-PR mechanism, unrelated to the
+    # `staging` branch). Only prod should count as "production" for GitHub
+    # Environment protection rules (required reviewers etc.). GitHub creates
+    # an Environment automatically on first reference if it doesn't exist yet
+    # in Settings -> Environments.
     environment:
-      name: ${{ github.event_name == 'push' && 'production' || 'preview' }}
-    # Build ręcznie (nie przez Oryx w akcji SWA), bo trzeba wstrzyknąć
-    # PACKAGES_READ_TOKEN jako auth token dla rejestru @szczypkaweb
-    # (npm.pkg.github.com) — patrz .npmrc w tym repo.
+      name: ${{ github.ref == 'refs/heads/main' && 'production' || (github.ref == 'refs/heads/staging' && 'staging' || 'preview') }}
+    # Manual build (not via Oryx in the SWA action), because
+    # PACKAGES_READ_TOKEN needs to be injected as the auth token for the
+    # @szczypkaweb registry (npm.pkg.github.com) — see .npmrc in this repo.
     #
-    # pnpm CELOWO ignoruje `${GITHUB_TOKEN}` w .npmrc zacommitowanym do repo,
-    # niezależnie od tego, czy ta zmienna jest ustawiona na poziomie joba czy
-    # stepa — to świadome zabezpieczenie pnpm (project .npmrc jest
-    # "untrusted" dla credentiali, bo ktoś mógłby go podmienić i wykraść
-    # token przez podstawiony rejestr; patrz warning "Ignored project-level
-    # auth setting..." / https://pnpm.io/npmrc). Jedyny sposób, żeby token
-    # faktycznie zadziałał, to ustawić go jawnie przez `pnpm config set`
-    # (user-level config) w osobnym stepie PRZED `pnpm install` - tak jak
-    # sam pnpm podpowiada w tym warningu.
+    # pnpm DELIBERATELY ignores `${GITHUB_TOKEN}` in a .npmrc committed to
+    # the repo, regardless of whether that variable is set at job or step
+    # level — this is a deliberate pnpm safeguard (a project .npmrc is
+    # "untrusted" for credentials, because someone could swap it and steal
+    # the token via a substituted registry; see the "Ignored project-level
+    # auth setting..." warning / https://pnpm.io/npmrc). The only way to
+    # actually make the token work is to set it explicitly via
+    # `pnpm config set` (user-level config) in a separate step BEFORE
+    # `pnpm install` - exactly what pnpm itself suggests in that warning.
     env:
       GITHUB_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
     steps:
@@ -56,6 +56,13 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # `deployment_environment` gives the `staging` branch a STABLE, PERSISTENT
+      # URL on this same SWA resource (<default-host>-staging.<region>.azure-
+      # staticapps.net) - not the ephemeral per-PR preview mechanism above,
+      # and no second Azure resource/cost. Empty string on prod/PR pushes -
+      # that's the SDK's own no-override value, so those keep deploying to
+      # the normal production/preview slots.
+      # https://learn.microsoft.com/en-us/azure/static-web-apps/named-environments
       - name: Deploy to Azure Static Web Apps
         id: deploy
         uses: Azure/static-web-apps-deploy@v1
@@ -67,25 +74,49 @@ jobs:
           api_location: ""
           output_location: ""
           skip_app_build: true
+          deployment_environment: ${{ github.ref == 'refs/heads/staging' && 'staging' || '' }}
 
-      # frontend-shell doesn't have its own Azure workflow yet (see task #8),
-      # so there's nowhere to auto-inject this as REACT_APP_REMOTE_URL. Until
-      # that exists, surface it here so whoever sets frontend-shell's build
-      # env (or that future workflow) knows the exact value to use - this app
-      # is a Module Federation remote (see webpack.config.ts), and
-      # frontend-shell needs this URL to find its remoteEntry.js at
-      # `${REACT_APP_REMOTE_URL}/remoteEntry.js` (defaults to
-      # http://localhost:8081 otherwise, which only works in local dev).
-      - name: Surface deployed URL for frontend-shell's REACT_APP_REMOTE_URL
+      # This app is a Module Federation remote (see webpack.config.ts) -
+      # frontend-shell needs to know its URL to find `remoteEntry.js`
+      # (defaults to http://localhost:8081 otherwise, local-dev only).
+      # Deliberately NOT auto-wired: frontend-shell reads it from its own
+      # repo Variable (`REACT_APP_REMOTE_URL` / `REACT_APP_REMOTE_URL_STAGING`),
+      # set manually once per environment - see infra/RUNBOOK.md section 3 for
+      # why cross-repo URL propagation isn't automated yet (no custom domain).
+      # This step just surfaces the value so it's easy to copy after a change
+      # (new region, resource recreated, etc).
+      - name: Surface deployed URL for frontend-shell's REACT_APP_REMOTE_URL(_STAGING)
         if: github.event_name == 'push'
         run: |
-          echo "### react-app deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "### react-app deployed (${{ github.ref == 'refs/heads/staging' && 'staging' || 'production' }})" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Set frontend-shell's build-time \`REACT_APP_REMOTE_URL\` to:" >> "$GITHUB_STEP_SUMMARY"
+          echo "Set frontend-shell's build-time \`REACT_APP_REMOTE_URL${{ github.ref == 'refs/heads/staging' && '_STAGING' || '' }}\` to:" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           echo "${{ steps.deploy.outputs.static_web_app_url }}" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  # Re-validates the shared staging stack against whatever this staging push
+  # just changed - a react-app-only change never redeploys frontend-shell
+  # (Module Federation loads remoteEntry.js at RUNTIME, not build time), so
+  # without this, a react-app regression on staging would go unnoticed until
+  # someone happened to also push frontend-shell or backend.
+  #
+  # Requires (Settings -> Secrets and variables -> Actions, this repo):
+  #   Variables: FRONTEND_SHELL_STAGING_URL, BACKEND_STAGING_URL
+  #   Secrets:   E2E_DATABASE_URL_STAGING (optional - omitted = 'app' project
+  #              in e2e-tests is safely skipped, only marketing+flows run)
+  # Also requires e2e-tests (marketplace-e2e) to allow Actions access from
+  # this repo under Settings -> Actions -> Access.
+  e2e:
+    needs: build_and_deploy_job
+    if: github.ref == 'refs/heads/staging'
+    uses: szczypkaweb/marketplace-e2e/.github/workflows/e2e.yml@main
+    with:
+      app_url: ${{ vars.FRONTEND_SHELL_STAGING_URL }}
+      api_url: ${{ vars.BACKEND_STAGING_URL }}
+    secrets:
+      E2E_DATABASE_URL: ${{ secrets.E2E_DATABASE_URL_STAGING }}
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
