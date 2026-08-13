@@ -53,6 +53,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Lint + Vitest in the same job as the build/deploy, for the same
+      # reason as frontend-shell's workflow: one required status check
+      # ("Build and Deploy Job") instead of two kept in sync separately.
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
       - name: Build
         run: pnpm build
 
