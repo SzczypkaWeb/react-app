@@ -53,6 +53,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Lint + Vitest in the same job as the build/deploy, for the same
+      # reason as frontend-shell's workflow: one required status check
+      # ("Build and Deploy Job") instead of two kept in sync separately.
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
       - name: Build
         run: pnpm build
 
@@ -106,6 +115,12 @@ jobs:
   #   Variables: FRONTEND_SHELL_STAGING_URL, BACKEND_STAGING_URL
   #   Secrets:   E2E_DATABASE_URL_STAGING (optional - omitted = 'app' project
   #              in e2e-tests is safely skipped, only marketing+flows run)
+  #              E2E_REPO_PAT (required - fine-grained PAT, Contents:
+  #              Read-only on marketplace-e2e; lets e2e-tests' own checkout
+  #              step read its own repo when invoked from here, since the
+  #              ambient GITHUB_TOKEN in this run's context can't. Separate
+  #              from the "Actions -> Access" org permission below, which
+  #              only allows the workflow_call itself, not the checkout.)
   # Also requires e2e-tests (marketplace-e2e) to allow Actions access from
   # this repo under Settings -> Actions -> Access.
   e2e:
@@ -117,6 +132,7 @@ jobs:
       api_url: ${{ vars.BACKEND_STAGING_URL }}
     secrets:
       E2E_DATABASE_URL: ${{ secrets.E2E_DATABASE_URL_STAGING }}
+      E2E_REPO_CHECKOUT_TOKEN: ${{ secrets.E2E_REPO_PAT }}
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'

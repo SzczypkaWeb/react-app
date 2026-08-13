@@ -109,6 +109,7 @@ describe('Module Federation shared-module async boundary', () => {
     // *consuming* one synchronously, before the share scope is initialized,
     // is what throws at runtime. So we assert the consume-shared module for
     // react is reachable only via a non-initial (async) chunk.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const chunkConsumingReact = stats.chunks.find((chunk: any) =>
       moduleNamesOf(chunk).some(
         (n) => n.startsWith('consume shared module') && n.includes('react@'),
