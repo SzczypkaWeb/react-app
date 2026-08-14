@@ -16,6 +16,7 @@
   "license": "ISC",
   "packageManager": "pnpm@10.34.4",
   "dependencies": {
+    "@sentry/react": "^10.69.0",
     "@szczypkaweb/shared-ui": "^0.3.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
