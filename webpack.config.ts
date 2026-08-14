@@ -95,6 +95,17 @@ const config: FullConfiguration = {
         'react-dom': { singleton: true, requiredVersion: false },
       },
     }),
+    // Same pattern as frontend-shell's webpack.config.ts - bakes the DSN in
+    // at build time since this is a static SPA bundle, no server to read a
+    // real env var from at runtime. Only consumed by bootstrap.tsx (the
+    // standalone entry point) - see the comment there for why Widget.tsx
+    // itself deliberately doesn't call Sentry.init() again.
+    new webpack.DefinePlugin({
+      'process.env.SENTRY_DSN': JSON.stringify(process.env.SENTRY_DSN ?? ''),
+      // Same reasoning as frontend-shell's webpack.config.ts - one Sentry
+      // project, tagged per-environment rather than a DSN per environment.
+      'process.env.SENTRY_ENVIRONMENT': JSON.stringify(process.env.SENTRY_ENVIRONMENT ?? 'development'),
+    }),
   ],
   devServer: {
     port: PORT,
