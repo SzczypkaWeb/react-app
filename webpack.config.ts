@@ -105,6 +105,10 @@ const config: FullConfiguration = {
       // Same reasoning as frontend-shell's webpack.config.ts - one Sentry
       // project, tagged per-environment rather than a DSN per environment.
       'process.env.SENTRY_ENVIRONMENT': JSON.stringify(process.env.SENTRY_ENVIRONMENT ?? 'development'),
+      // Same reasoning as frontend-shell's webpack.config.ts - without this,
+      // Sentry's browser SDK discards session tracking data (harmless to
+      // error reporting itself, but breaks Release Health).
+      'process.env.SENTRY_RELEASE': JSON.stringify(process.env.SENTRY_RELEASE ?? 'local'),
     }),
   ],
   devServer: {
