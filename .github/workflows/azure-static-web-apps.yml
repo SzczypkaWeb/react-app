@@ -70,6 +70,7 @@ jobs:
         run: pnpm build
         env:
           SENTRY_DSN: ${{ vars.SENTRY_DSN }}
+          SENTRY_ENVIRONMENT: ${{ github.ref == 'refs/heads/main' && 'production' || (github.ref == 'refs/heads/staging' && 'staging' || 'preview') }}
 
       # `deployment_environment` gives the `staging` branch a STABLE, PERSISTENT
       # URL on this same SWA resource (<default-host>-staging.<region>.azure-

@@ -19,6 +19,7 @@ import * as Sentry from '@sentry/react';
 // separate gap.
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
+  environment: process.env.SENTRY_ENVIRONMENT,
   debug: true,
 });
 

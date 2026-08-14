@@ -102,6 +102,9 @@ const config: FullConfiguration = {
     // itself deliberately doesn't call Sentry.init() again.
     new webpack.DefinePlugin({
       'process.env.SENTRY_DSN': JSON.stringify(process.env.SENTRY_DSN ?? ''),
+      // Same reasoning as frontend-shell's webpack.config.ts - one Sentry
+      // project, tagged per-environment rather than a DSN per environment.
+      'process.env.SENTRY_ENVIRONMENT': JSON.stringify(process.env.SENTRY_ENVIRONMENT ?? 'development'),
     }),
   ],
   devServer: {
