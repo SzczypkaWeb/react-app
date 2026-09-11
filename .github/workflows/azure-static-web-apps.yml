@@ -35,6 +35,12 @@ jobs:
     # `pnpm install` - exactly what pnpm itself suggests in that warning.
     env:
       GITHUB_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
+      # `secrets` isn't a recognized context inside a step's `if:` (GitHub
+      # Actions rejects it at workflow-parse time: "Unrecognized named-value:
+      # 'secrets'") - only `env`/`vars`/`github` etc. are. Resolve it into an
+      # env var here instead, where `secrets` access is fine, then check
+      # *that* in the deploy step's `if:` below.
+      HAS_AZURE_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -80,16 +86,21 @@ jobs:
       # that's the SDK's own no-override value, so those keep deploying to
       # the normal production/preview slots.
       # https://learn.microsoft.com/en-us/azure/static-web-apps/named-environments
-      # skip_deploy_on_missing_secrets: workflow runs triggered by Dependabot
+      # `if:` guard, not `skip_deploy_on_missing_secrets` (removed - that
+      # input is silently ignored: `@v1`'s actual "valid inputs" list doesn't
+      # include it, and it's a long-standing, still-open bug in the action
+      # itself - github.com/Azure/static-web-apps/issues/679, open since
+      # 2022, hard-fails with "deployment_token was not provided" regardless
+      # of the setting). Skip the step at the GitHub Actions level instead,
+      # before the action ever runs: workflow runs triggered by Dependabot
       # (pull_request, actor dependabot[bot]) only get Dependabot secrets, not
       # regular Actions secrets - AZURE_STATIC_WEB_APPS_API_TOKEN comes back
       # empty in that context, and this step would otherwise hard-fail the
       # whole job over a step that a dependency-bump PR never actually needs
-      # (it only needs build/lint/test to pass, not a real deploy). Skips
-      # gracefully instead of failing when the token is missing, for any
-      # reason.
+      # (it only needs build/lint/test to pass, not a real deploy).
       - name: Deploy to Azure Static Web Apps
         id: deploy
+        if: env.HAS_AZURE_TOKEN == 'true'
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
@@ -99,7 +110,6 @@ jobs:
           api_location: ""
           output_location: ""
           skip_app_build: true
-          skip_deploy_on_missing_secrets: true
           deployment_environment: ${{ github.ref == 'refs/heads/staging' && 'staging' || '' }}
 
       # This app is a Module Federation remote (see webpack.config.ts) -
@@ -155,8 +165,13 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
     runs-on: ubuntu-latest
     name: Close Pull Request Job
+    env:
+      # See the matching comment on build_and_deploy_job's env block above -
+      # `secrets` isn't valid inside a step `if:`.
+      HAS_AZURE_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN != '' }}
     steps:
       - name: Close Pull Request
+        if: env.HAS_AZURE_TOKEN == 'true'
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
